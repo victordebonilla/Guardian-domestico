@@ -1,0 +1,7 @@
+# Archivo: .gitignore
+
+# Ignorar la carpeta de secretos
+.streamlit/
+
+# Ignorar el entorno virtual de Python
+.venv/
