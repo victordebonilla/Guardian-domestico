@@ -1,4 +1,4 @@
-# --- Archivo: app.py (V6.0 - Fix Bucle de Sesión) ---
+# --- Archivo: app.py (V6.1 - Fix Bucle Pop-up) ---
 
 import streamlit as st
 import pandas as pd
@@ -88,12 +88,12 @@ def handle_logout(supabase_client):
     except Exception as e:
         st.warning(f"Error al cerrar sesión en Supabase: {e}")
         
-    keys_to_delete = ['user', 'logged_in', 'data_loaded', 'active_tab', 'transactions_df', 'accounts_df', 'goals_df', 'categories', 'members', 'budget_config', 'category_budgets']
+    keys_to_delete = ['user', 'logged_in', 'data_loaded', 'active_tab', 'transactions_df', 'accounts_df', 'goals_df', 'categories', 'members', 'budget_config', 'category_budgets', 'auth_popup_open']
     for key in keys_to_delete:
         if key in st.session_state:
             del st.session_state[key]
             
-    st.rerun() # CORRECCIÓN: Usar st.rerun()
+    st.rerun() 
 
 
 # --- 2. VISTA DE LOGIN Y ENRUTAMIENTO ---
@@ -105,36 +105,74 @@ def view_login_page(supabase_client, app_url):
     
     # V5.7 CORRECCIÓN CRÍTICA DE PROTOCOLO: Forzar HTTPS para el redireccionamiento.
     if not app_url.startswith("https://"):
-        redirect_url = app_url.replace("http://", "https://")
+        redirect_url_base = app_url.replace("http://", "https://")
     else:
-        redirect_url = app_url
+        redirect_url_base = app_url
         
-    # Aseguramos que la URL termine SIN la barra final
-    if redirect_url.endswith("/"):
-        redirect_url = redirect_url[:-1]
-        
-    # V5.8: Muestra la URL de redirección para depuración
-    st.info("Para depurar el bucle de login, verifica que esta **URL EXACTA** esté en los ajustes de Supabase (Auth -> Settings -> Site URL y Redirect URLs).")
-    st.code(redirect_url, language='text')
+    # Aseguramos que la URL base termine SIN la barra final
+    if redirect_url_base.endswith("/"):
+        redirect_url_base = redirect_url_base[:-1]
     
+    # V6.1: La URL de redirección DEBE apuntar al manejador HTML para cerrar el pop-up
+    popup_redirect_url = f"{redirect_url_base}/auth_handler.html"
+
+    st.info("⚠️ Configuración CRÍTICA: La **URL de Redirección (Callback)** en Supabase y Google Cloud DEBE ser:")
+    st.code(popup_redirect_url, language='text')
+
     if st.button("Iniciar sesión con Google", use_container_width=True, type="primary"):
         try:
-            # Iniciar el flujo OAuth con Google
+            # 1. Obtener la URL de autenticación de Supabase
             auth_url_response = supabase_client.auth.sign_in_with_oauth({
                 "provider": "google",
                 "options": {
-                    "redirect_to": redirect_url  # Usa la URL HTTPS limpia
+                    "redirect_to": popup_redirect_url # Usamos la URL del manejador HTML
                 }
             })
             
-            # Mostrar el enlace de redirección para que el usuario haga clic
             auth_url = auth_url_response.url
-            st.markdown(f"Haga clic aquí para iniciar sesión: [Iniciar sesión con Google]({auth_url})")
-            st.info("Serás redirigido a Google para autenticarte. La página se recargará automáticamente.")
+            
+            # 2. Abrir el pop-up (con código HTML/JS inyectado)
+            st.session_state['auth_popup_open'] = True
+            
+            # Inyectamos el JS para abrir el pop-up
+            js_code = f"""
+            <script>
+                // Abrir una ventana de pop-up con las dimensiones adecuadas
+                window.open('{auth_url}', 'SupabaseAuth', 'width=600,height=800,scrollbars=yes');
+            </script>
+            """
+            st.components.v1.html(js_code, height=0, width=0)
+            
+            st.warning("Se ha abierto una nueva ventana para el inicio de sesión. Por favor, complétalo y la ventana se cerrará automáticamente.")
+            st.info("Una vez que la ventana se cierre, haz clic en 'Comprobar Sesión' a continuación.")
 
+    
         except Exception as e:
             st.error(f"Error al iniciar sesión con Google: {e}")
-            st.error("Asegúrate de haber habilitado Google Auth y configurado las URL de redirección en Supabase y Google Cloud.")
+            st.error("Asegúrate de haber configurado el nuevo 'auth_handler.html' como URL de redirección.")
+            st.session_state['auth_popup_open'] = False
+
+    # Botón para comprobar la sesión después de que se cierre el pop-up
+    if st.session_state.get('auth_popup_open', False):
+        if st.button("Comprobar Sesión", use_container_width=True, type="secondary"):
+             # Forzamos una recarga para verificar la sesión en el siguiente ciclo
+             st.rerun() 
+             
+    # V6.1: Script para ESCUCHAR el mensaje del pop-up (si la recarga automática falla)
+    st.markdown("""
+        <script>
+        function receiveMessage(event) {
+            // Solo acepta mensajes de Streamlit Cloud o Supabase (por seguridad, usamos *)
+            // El handler HTML envía 'authSuccess' o 'authAttempted'
+            if (event.data === 'authSuccess' || event.data === 'authAttempted') {
+                // Si recibe el mensaje, fuerza la recarga de la ventana principal
+                window.location.reload(); 
+            }
+        }
+        window.addEventListener("message", receiveMessage, false);
+        </script>
+        """, unsafe_allow_html=True)
+
 
 def main_app_content(supabase_client, user_id, user_email):
     """Contiene la aplicación principal (Sidebar y Vistas de Pestaña)."""
@@ -147,7 +185,7 @@ def main_app_content(supabase_client, user_id, user_email):
 
     # --- NAVEGACIÓN EN BARRA LATERAL ---
     st.sidebar.title("🛡️ Guardian Doméstico")
-    st.sidebar.markdown(f"**Versión:** 6.0 (Fix Bucle de Sesión)")
+    st.sidebar.markdown(f"**Versión:** 6.1 (Fix Bucle Pop-up)")
     st.sidebar.markdown("---")
     st.sidebar.write(f"Sesión iniciada como:")
     st.sidebar.success(f"**{user_email}**")
@@ -197,7 +235,7 @@ def main_app_content(supabase_client, user_id, user_email):
 
 def main():
     st.set_page_config(
-        page_title="Guardian Doméstico V6.0 - Fix Bucle de Sesión", # Título actualizado
+        page_title="Guardian Doméstico V6.1 - Fix Bucle Pop-up",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -205,58 +243,37 @@ def main():
     supabase_client = init_supabase_connection()
     
     # --- Obtención de URL pública para redirección (Fix de localhost) ---
-    # Usamos la URL que Streamlit nos proporciona (o el default localhost)
     app_url = os.environ.get("STREAMLIT_URL", "http://localhost:8501")
     if app_url.endswith("/"):
         app_url = app_url[:-1]
 
-    # --- Lógica CRÍTICA para romper el Bucle de Login (OAuth Callback Handler) ---
-    query_params = st.query_params
+    # --- Lógica CRÍTICA para obtener la sesión del usuario directamente ---
     
-    # Manejo defensivo: La verificación más robusta contra la corrupción de tipo 'str'
-    if isinstance(query_params, str):
-        # Si Streamlit Cloud lo corrompió a string, saltamos esta sección para evitar el error.
-        auth_code = None 
-    else:
-        # Lógica de extracción de código (Si es un objeto legible)
-        auth_code_list = query_params.get('code') 
-        auth_code = auth_code_list[0] if isinstance(auth_code_list, list) and auth_code_list else None
+    # En la solución Pop-up, el token se guarda en el fragmento (#access_token=...) 
+    # de la URL del pop-up, no en los query params (?code=...) de la ventana principal.
+    # Por lo tanto, Streamlit DEBE verificar si la sesión ya existe usando la API.
+    
+    # 1. Intentar obtener la sesión activa de Supabase
+    try:
+        session_info = supabase_client.auth.get_session()
+        
+        # 2. Si hay una sesión válida, guarda la info en session_state y procede.
+        if session_info and session_info.user:
+            st.session_state['user'] = session_info.user
+            st.session_state['logged_in'] = True
+            
+        else:
+            # Si no hay sesión válida, se considera no logueado.
+            if 'logged_in' in st.session_state:
+                del st.session_state['logged_in']
+            if 'user' in st.session_state:
+                del st.session_state['user']
 
-
-    if auth_code:
-        with st.spinner("Confirmando sesión con Supabase..."):
-            try:
-                # Intenta intercambiar el código por una sesión real
-                session_response = supabase_client.auth.exchange_code_for_session(auth_code)
-
-                # V5.9: Lectura explícita del token y el usuario para garantizar la persistencia
-                session_token = session_response.access_token
-                user_data = session_response.user
-
-                if user_data and session_token:
-                    # 2.1 ÉXITO: Guardar la sesión y el usuario
-                    st.session_state['user'] = user_data
-                    st.session_state['logged_in'] = True
-
-                    # 2.2 Limpiar la URL y forzar RERUN (¡ESTO ROMPE EL BUCLE!)
-                    st.set_query_params() # Limpia ?code=... de la URL
-                    time.sleep(0.5) # V6.0: Pausa crítica para estabilizar la sesión antes del rerun
-                    st.rerun() # CORRECCIÓN: Usar st.rerun()
-                    return # Detiene la ejecución actual
-
-                else:
-                    st.error("Error de autenticación: No se pudo obtener la sesión.")
-                    st.set_query_params()
-                    time.sleep(1)
-                    st.rerun() # CORRECCIÓN: Usar st.rerun()
-
-            except Exception as e:
-                # Este error ocurre si el código es inválido o ya fue usado.
-                # También ocurre si hay un error en la URL de redirección (requested path is invalid)
-                st.error(f"Error fatal durante el intercambio de código: {e}")
-                st.set_query_params()
-                time.sleep(1)
-                st.rerun() # CORRECCIÓN: Usar st.rerun()
+    except Exception as e:
+        # Esto sucede si no hay sesión o si la API falla.
+        # Simplemente aseguramos que el estado de login esté limpio.
+        if 'logged_in' in st.session_state:
+            del st.session_state['logged_in']
 
 
     # --- 4. Lógica principal de enrutamiento ---
