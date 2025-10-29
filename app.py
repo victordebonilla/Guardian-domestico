@@ -197,7 +197,7 @@ def main_app_content(supabase_client, user_id, user_email):
 
 def main():
     st.set_page_config(
-        page_title="Guardian Doméstico V5.3",
+        page_title="Guardian Doméstico V5.9 - Fix Persistencia",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -229,9 +229,13 @@ def main():
                 # Intenta intercambiar el código por una sesión real
                 session_response = supabase_client.auth.exchange_code_for_session(auth_code)
 
-                if session_response and session_response.user:
+                # V5.9: Lectura explícita del token y el usuario para garantizar la persistencia
+                session_token = session_response.access_token
+                user_data = session_response.user
+
+                if user_data and session_token:
                     # 2.1 ÉXITO: Guardar la sesión y el usuario
-                    st.session_state['user'] = session_response.user
+                    st.session_state['user'] = user_data
                     st.session_state['logged_in'] = True
 
                     # 2.2 Limpiar la URL y forzar RERUN (¡ESTO ROMPE EL BUCLE!)
@@ -268,3 +272,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
