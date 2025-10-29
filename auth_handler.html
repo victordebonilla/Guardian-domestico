@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <title>Autenticación Completa</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-green-600 mb-4">¡Sesión Iniciada!</h1>
+        <p class="text-gray-700">Puedes cerrar esta ventana.</p>
+        <p class="text-sm text-gray-500 mt-4">Actualizando la aplicación principal...</p>
+    </div>
+
+    <script>
+        // Este script usa el API de Supabase para obtener los datos de la sesión
+        // de la URL (Fragmento #access_token=...) y luego cierra la ventana.
+
+        // Función principal que se ejecuta al cargar la página
+        function handleAuthCallback() {
+            // Verifica si el fragmento contiene datos de sesión (Supabase lo devuelve aquí)
+            const params = new URLSearchParams(window.location.hash.substring(1));
+
+            if (params.has('access_token')) {
+                // Si la sesión está en el fragmento (login exitoso), intenta informar a la ventana principal.
+                try {
+                    // Intenta llamar a la ventana principal (opener) para forzar la recarga
+                    if (window.opener && !window.opener.closed) {
+                         // 1. Informar a la ventana principal que el login fue exitoso.
+                         // Nota: Por seguridad, solo podemos comunicar un mensaje simple y forzar la recarga.
+                         window.opener.postMessage('authSuccess', '*');
+                         // 2. Usar la redirección en la ventana principal.
+                         window.opener.location.reload();
+                    }
+                } catch (e) {
+                    console.error("No se pudo comunicar con la ventana principal.", e);
+                }
+            } else {
+                 // Si no hay token, significa un error o que fue una redirección simple.
+                 // Forzamos un mensaje al principal de todas formas.
+                 try {
+                     if (window.opener && !window.opener.closed) {
+                         window.opener.postMessage('authAttempted', '*');
+                     }
+                 } catch(e) {}
+            }
+
+            // Cierra la ventana pop-up después de un breve retraso
+            setTimeout(() => {
+                window.close();
+            }, 1000);
+        }
+
+        handleAuthCallback();
+    </script>
+</body>
+</html>
