@@ -31,42 +31,32 @@
     </div>
 
     <script>
-        // Este script usa el API de Supabase para obtener los datos de la sesión
-        // de la URL (Fragmento #access_token=...) y luego cierra la ventana.
-
         // Función principal que se ejecuta al cargar la página
         function handleAuthCallback() {
             // Verifica si el fragmento contiene datos de sesión (Supabase lo devuelve aquí)
             const params = new URLSearchParams(window.location.hash.substring(1));
-
-            if (params.has('access_token')) {
-                // Si la sesión está en el fragmento (login exitoso), intenta informar a la ventana principal.
+            
+            // Si hay datos de sesión O si la URL fue limpia (simplemente llegó aquí)
+            if (params.has('access_token') || true) { 
                 try {
-                    // Intenta llamar a la ventana principal (opener) para forzar la recarga
                     if (window.opener && !window.opener.closed) {
-                         // 1. Informar a la ventana principal que el login fue exitoso.
-                         // Nota: Por seguridad, solo podemos comunicar un mensaje simple y forzar la recarga.
-                         window.opener.postMessage('authSuccess', '*');
-                         // 2. Usar la redirección en la ventana principal.
-                         window.opener.location.reload();
+                         // Usar postMessage para notificar al padre
+                         window.opener.postMessage('authSuccess', '*'); 
+                         
+                         // Intentar recargar la ventana principal de forma agresiva
+                         if (typeof window.opener.location.reload === 'function') {
+                             window.opener.location.reload(true); // Recarga forzada
+                         }
                     }
                 } catch (e) {
                     console.error("No se pudo comunicar con la ventana principal.", e);
                 }
-            } else {
-                 // Si no hay token, significa un error o que fue una redirección simple.
-                 // Forzamos un mensaje al principal de todas formas.
-                 try {
-                     if (window.opener && !window.opener.closed) {
-                         window.opener.postMessage('authAttempted', '*');
-                     }
-                 } catch(e) {}
             }
-
+            
             // Cierra la ventana pop-up después de un breve retraso
             setTimeout(() => {
                 window.close();
-            }, 1000);
+            }, 500); // 500ms es suficiente tiempo para que la recarga se inicie
         }
 
         handleAuthCallback();
