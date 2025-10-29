@@ -1,4 +1,4 @@
-# --- Archivo: app.py (V5.8 - Display Redirect URL) ---
+# --- Archivo: app.py (V6.0 - Fix Bucle de Sesión) ---
 
 import streamlit as st
 import pandas as pd
@@ -147,7 +147,7 @@ def main_app_content(supabase_client, user_id, user_email):
 
     # --- NAVEGACIÓN EN BARRA LATERAL ---
     st.sidebar.title("🛡️ Guardian Doméstico")
-    st.sidebar.markdown(f"**Versión:** 5.3 (Final de OAuth)")
+    st.sidebar.markdown(f"**Versión:** 6.0 (Fix Bucle de Sesión)")
     st.sidebar.markdown("---")
     st.sidebar.write(f"Sesión iniciada como:")
     st.sidebar.success(f"**{user_email}**")
@@ -197,7 +197,7 @@ def main_app_content(supabase_client, user_id, user_email):
 
 def main():
     st.set_page_config(
-        page_title="Guardian Doméstico V5.9 - Fix Persistencia",
+        page_title="Guardian Doméstico V6.0 - Fix Bucle de Sesión", # Título actualizado
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -240,6 +240,7 @@ def main():
 
                     # 2.2 Limpiar la URL y forzar RERUN (¡ESTO ROMPE EL BUCLE!)
                     st.set_query_params() # Limpia ?code=... de la URL
+                    time.sleep(0.5) # V6.0: Pausa crítica para estabilizar la sesión antes del rerun
                     st.rerun() # CORRECCIÓN: Usar st.rerun()
                     return # Detiene la ejecución actual
 
@@ -272,4 +273,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
